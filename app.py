@@ -250,41 +250,58 @@ def delete_aluno(id):
 def validar_acesso():
     """
     Rota que a catraca vai chamar pra validar se o aluno pode entrar
-    Enviar: {"cpf": "123.456.789-00"}
+    Enviar: {"cpf": "12345678900"}
     """
     dados = request.get_json()
     
     if not dados or "cpf" not in dados:
         return jsonify({"error": "Envie o CPF para validação"}), 400
     
-    cpf = dados["cpf"]
+    # 🔥 Recebe o CPF e limpa (remove pontos, traços, espaços)
+    cpf_recebido = dados["cpf"]
+    cpf_recebido_limpo = ''.join(filter(str.isdigit, cpf_recebido))
+    
+    print(f"🔍 Buscando CPF: {cpf_recebido_limpo}")
     
     try:
-        # Busca aluno pelo CPF
-        alunos = db.collection('alunos').where('cpf', '==', cpf).limit(1).stream()
+        # 🔥 Busca TODOS os alunos (porque o where não consegue comparar ignorando formatação)
+        alunos = db.collection('alunos').stream()
+        aluno_encontrado = None
         
         for aluno in alunos:
             dados_aluno = aluno.to_dict()
+            cpf_banco = dados_aluno.get("cpf", "")
             
-            # Verifica se está ativo
-            if dados_aluno.get("status") == "ativo":
+            # 🔥 Limpa o CPF do banco também
+            cpf_banco_limpo = ''.join(filter(str.isdigit, cpf_banco))
+            
+            print(f"Comparando: {cpf_recebido_limpo} == {cpf_banco_limpo}")
+            
+            if cpf_recebido_limpo == cpf_banco_limpo:
+                aluno_encontrado = dados_aluno
+                break
+        
+        if aluno_encontrado:
+            print(f"✅ Aluno encontrado: {aluno_encontrado.get('nome')}")
+            
+            if aluno_encontrado.get("status") == "ativo":
                 return jsonify({
                     "acesso": True,
                     "mensagem": "Acesso liberado!",
-                    "nome": dados_aluno.get("nome")
+                    "nome": aluno_encontrado.get("nome")
                 }), 200
             else:
                 return jsonify({
                     "acesso": False,
-                    "mensagem": f"Acesso negado! Aluno está {dados_aluno.get('status')}",
-                    "nome": dados_aluno.get("nome")
+                    "mensagem": f"Acesso negado! Aluno está {aluno_encontrado.get('status')}",
+                    "nome": aluno_encontrado.get("nome")
                 }), 200
-        
-        # CPF não encontrado
-        return jsonify({
-            "acesso": False,
-            "mensagem": "CPF não cadastrado na academia"
-        }), 200
+        else:
+            print("❌ CPF não encontrado")
+            return jsonify({
+                "acesso": False,
+                "mensagem": "CPF não cadastrado na academia"
+            }), 200
         
     except Exception as e:
         print("ERRO:", e)
