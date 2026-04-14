@@ -209,22 +209,35 @@ def aluno_patch(id):
         if not docs:
             return jsonify({"error": "Aluno não encontrado"}), 404
         
-        doc_ref = db.collection("alunos").document(docs[0].id)
+        # Pega o documento
+        doc = list(docs)[0]
+        doc_ref = db.collection("alunos").document(doc.id)
         update_aluno = {}
         
         if "nome" in dados:
             update_aluno["nome"] = dados["nome"]
         
-        # 🔥 ADICIONADO SUPORTE PARA CPF
+        # 🔥 CORREÇÃO: Limpa o CPF que veio do frontend
         if "cpf" in dados:
-            # Limpa o CPF recebido
-            cpf_limpo = ''.join(filter(str.isdigit, dados["cpf"]))
+            # Remove tudo que não é número do CPF recebido
+            cpf_recebido_limpo = ''.join(filter(str.isdigit, dados["cpf"]))
             
-            # Verificar se o novo CPF já existe em outro aluno
-            cpf_existente = db.collection('alunos').where('cpf', '==', cpf_limpo).where('id', '!=', id).get()
-            if len(list(cpf_existente)) > 0:
+            # Busca todos os alunos para verificar CPF duplicado (ignorando formatação)
+            todos_alunos = db.collection('alunos').stream()
+            cpf_duplicado = False
+            
+            for aluno in todos_alunos:
+                dados_aluno = aluno.to_dict()
+                if dados_aluno.get("id") != id:  # Ignora o próprio aluno
+                    cpf_banco_limpo = ''.join(filter(str.isdigit, dados_aluno.get("cpf", "")))
+                    if cpf_banco_limpo == cpf_recebido_limpo:
+                        cpf_duplicado = True
+                        break
+            
+            if cpf_duplicado:
                 return jsonify({"error": "CPF já cadastrado para outro aluno!"}), 400
-            update_aluno["cpf"] = cpf_limpo
+            
+            update_aluno["cpf"] = cpf_recebido_limpo
         
         if "status" in dados:
             if dados["status"] not in ["ativo", "suspenso", "cancelado"]:
@@ -232,9 +245,11 @@ def aluno_patch(id):
             update_aluno["status"] = dados["status"]
 
         # Atualiza o Firestore
-        doc_ref.update(update_aluno)
-
-        return jsonify({"message": "Aluno alterado com sucesso"}), 200
+        if update_aluno:
+            doc_ref.update(update_aluno)
+            return jsonify({"message": "Aluno alterado com sucesso"}), 200
+        else:
+            return jsonify({"error": "Nenhum dado para atualizar"}), 400
 
     except Exception as e:
         print("ERRO:", e)
