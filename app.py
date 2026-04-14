@@ -193,16 +193,16 @@ def aluno_put(id):
         print("ERRO:", e)
         return jsonify({"error": "Falha na alteração do aluno"}), 400
 
-# Rota 6 - Método PATCH - Alteração parcial (pode alterar só nome ou só status)
+# Rota 6 - Método PATCH - Alteração parcial
 @app.route("/alunos/<int:id>", methods=['PATCH'])
 @token_obrigatorio
 def aluno_patch(id):
     
     dados = request.get_json()
 
-    # PATCH - pode alterar só nome ou só status
-    if not dados or ("nome" not in dados and "status" not in dados):
-        return jsonify({"error": "Dados inválidos! Envie nome ou status"}), 400
+    # PATCH - pode alterar nome, cpf ou status
+    if not dados or ("nome" not in dados and "cpf" not in dados and "status" not in dados):
+        return jsonify({"error": "Dados inválidos! Envie nome, cpf ou status"}), 400
     
     try:
         docs = db.collection("alunos").where("id", "==", id).limit(1).get()
@@ -215,8 +215,18 @@ def aluno_patch(id):
         if "nome" in dados:
             update_aluno["nome"] = dados["nome"]
         
+        # 🔥 ADICIONADO SUPORTE PARA CPF
+        if "cpf" in dados:
+            # Limpa o CPF recebido
+            cpf_limpo = ''.join(filter(str.isdigit, dados["cpf"]))
+            
+            # Verificar se o novo CPF já existe em outro aluno
+            cpf_existente = db.collection('alunos').where('cpf', '==', cpf_limpo).where('id', '!=', id).get()
+            if len(list(cpf_existente)) > 0:
+                return jsonify({"error": "CPF já cadastrado para outro aluno!"}), 400
+            update_aluno["cpf"] = cpf_limpo
+        
         if "status" in dados:
-            # Valida status
             if dados["status"] not in ["ativo", "suspenso", "cancelado"]:
                 return jsonify({"error": "Status inválido! Use: ativo, suspenso ou cancelado"}), 400
             update_aluno["status"] = dados["status"]
@@ -228,7 +238,7 @@ def aluno_patch(id):
 
     except Exception as e:
         print("ERRO:", e)
-        return jsonify({"error": "Falha na alteração do aluno"}), 400
+        return jsonify({"error": f"Falha na alteração: {str(e)}"}), 400
 
 # Rota 7 - DELETE - Excluir aluno
 @app.route("/alunos/<int:id>", methods=['DELETE'])
@@ -264,7 +274,6 @@ def validar_acesso():
     print(f"🔍 Buscando CPF: {cpf_recebido_limpo}")
     
     try:
-        # 🔥 Busca TODOS os alunos (porque o where não consegue comparar ignorando formatação)
         alunos = db.collection('alunos').stream()
         aluno_encontrado = None
         
