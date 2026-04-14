@@ -1,0 +1,509 @@
+openapi: 3.0.0
+info:
+  title: API Academia Catraca
+  description: API para controle de acesso de alunos na academia com validação por CPF
+  version: 1.0.0
+  contact:
+    name: Julio Aurelio Souza
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Servidor de desenvolvimento
+  - url: https://sua-api.vercel.app
+    description: Servidor de produção
+
+tags:
+  - name: Status
+    description: Rotas de verificação da API
+  - name: Autenticação
+    description: Login e geração de token JWT
+  - name: Alunos
+    description: CRUD completo de alunos (requer token para POST/PUT/PATCH/DELETE)
+  - name: Catraca
+    description: Validação de acesso por CPF
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtido via endpoint /login
+
+  schemas:
+    # Schemas de Aluno
+    Aluno:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID auto-incrementado do aluno
+          example: 1
+        nome:
+          type: string
+          description: Nome completo do aluno
+          example: João Silva
+        cpf:
+          type: string
+          description: CPF do aluno (apenas números)
+          example: "12345678900"
+        status:
+          type: string
+          enum: [ativo, suspenso, cancelado]
+          description: Status da matrícula
+          example: ativo
+      required:
+        - id
+        - nome
+        - cpf
+        - status
+
+    AlunoInput:
+      type: object
+      properties:
+        nome:
+          type: string
+          description: Nome completo do aluno
+          example: João Silva
+        cpf:
+          type: string
+          description: CPF do aluno (apenas números)
+          example: "12345678900"
+      required:
+        - nome
+        - cpf
+
+    AlunoUpdateInput:
+      type: object
+      properties:
+        nome:
+          type: string
+          description: Nome completo do aluno
+          example: João Silva Atualizado
+        cpf:
+          type: string
+          description: CPF do aluno (apenas números)
+          example: "12345678900"
+      required:
+        - nome
+        - cpf
+
+    AlunoPatchInput:
+      type: object
+      properties:
+        nome:
+          type: string
+          description: Nome completo do aluno
+          example: João Silva
+        status:
+          type: string
+          enum: [ativo, suspenso, cancelado]
+          description: Status da matrícula
+          example: suspenso
+      minProperties: 1
+
+    # Schemas de Autenticação
+    LoginInput:
+      type: object
+      properties:
+        usuario:
+          type: string
+          description: Nome de usuário
+          example: admin
+        senha:
+          type: string
+          description: Senha do usuário
+          example: "123456"
+      required:
+        - usuario
+        - senha
+
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Login realizado com sucesso!
+        token:
+          type: string
+          description: Token JWT para autenticação
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    # Schemas de Validação
+    ValidacaoInput:
+      type: object
+      properties:
+        cpf:
+          type: string
+          description: CPF do aluno para validação
+          example: "12345678900"
+      required:
+        - cpf
+
+    ValidacaoResponse:
+      type: object
+      properties:
+        acesso:
+          type: boolean
+          description: true se acesso liberado, false caso contrário
+          example: true
+        mensagem:
+          type: string
+          description: Mensagem explicativa
+          example: Acesso liberado!
+        nome:
+          type: string
+          description: Nome do aluno (quando encontrado)
+          example: João Silva
+
+    # Schemas de Erro
+    ErroResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensagem de erro
+          example: Aluno não encontrado
+
+paths:
+  # Rotas de Status
+  /:
+    get:
+      tags:
+        - Status
+      summary: Verifica status da API
+      description: Retorna informações da API
+      responses:
+        '200':
+          description: API funcionando
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api:
+                    type: string
+                    example: academia-catraca
+                  version:
+                    type: string
+                    example: "1.0"
+                  Author:
+                    type: string
+                    example: Julio Aurelio Souza
+
+  # Rotas de Autenticação
+  /login:
+    post:
+      tags:
+        - Autenticação
+      summary: Realiza login do administrador
+      description: Autentica o admin e retorna um token JWT válido por 1 hora
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: Login realizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Dados incompletos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '401':
+          description: Usuário ou senha inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+  # Rotas de Alunos
+  /alunos:
+    get:
+      tags:
+        - Alunos
+      summary: Lista todos os alunos
+      description: Retorna uma lista com todos os alunos cadastrados
+      responses:
+        '200':
+          description: Lista de alunos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Aluno'
+
+    post:
+      tags:
+        - Alunos
+      summary: Cadastra um novo aluno
+      description: Cria um novo aluno com ID automático e status inicial "ativo"
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlunoInput'
+      responses:
+        '201':
+          description: Aluno criado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Aluno cadastrado com sucesso!
+                  id:
+                    type: integer
+                    example: 1
+        '400':
+          description: Dados inválidos ou CPF já cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '401':
+          description: Token ausente ou inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+  /alunos/{id}:
+    get:
+      tags:
+        - Alunos
+      summary: Busca aluno por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID do aluno
+      responses:
+        '200':
+          description: Aluno encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Aluno'
+        '404':
+          description: Aluno não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+    put:
+      tags:
+        - Alunos
+      summary: Atualiza aluno completamente
+      description: Substitui todos os dados do aluno (nome e CPF)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID do aluno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlunoUpdateInput'
+      responses:
+        '200':
+          description: Aluno atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Aluno alterado com sucesso
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '401':
+          description: Token ausente ou inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '404':
+          description: Aluno não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+    patch:
+      tags:
+        - Alunos
+      summary: Atualiza aluno parcialmente
+      description: Atualiza apenas os campos enviados (nome ou status)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID do aluno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlunoPatchInput'
+      responses:
+        '200':
+          description: Aluno atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Aluno alterado com sucesso
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '401':
+          description: Token ausente ou inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '404':
+          description: Aluno não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+    delete:
+      tags:
+        - Alunos
+      summary: Remove um aluno
+      description: Exclui permanentemente o aluno do banco de dados
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID do aluno
+      responses:
+        '200':
+          description: Aluno removido com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Aluno excluído com sucesso!
+        '401':
+          description: Token ausente ou inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '404':
+          description: Aluno não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+  /alunos/cpf/{cpf}:
+    get:
+      tags:
+        - Alunos
+      summary: Busca aluno por CPF
+      description: Retorna os dados do aluno correspondente ao CPF informado
+      parameters:
+        - name: cpf
+          in: path
+          required: true
+          schema:
+            type: string
+          description: CPF do aluno (apenas números)
+          example: "12345678900"
+      responses:
+        '200':
+          description: Aluno encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Aluno'
+        '404':
+          description: CPF não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+
+  # Rota da Catraca
+  /validar-acesso:
+    post:
+      tags:
+        - Catraca
+      summary: Valida acesso do aluno na catraca
+      description: Verifica se o CPF está cadastrado e se o status é "ativo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidacaoInput'
+      responses:
+        '200':
+          description: Resultado da validação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidacaoResponse'
+        '400':
+          description: CPF não enviado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
